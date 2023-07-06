@@ -1,0 +1,64 @@
+﻿@page "/trades"
+@using System.Data;
+@using MySqlConnector;
+
+@inject IConfiguration configuration;
+
+<PageTitle>Trades</PageTitle>
+
+<h3>Trades</h3>
+
+@if(reader == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Symbol</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Quantity</th>
+                <th>Cash</th>
+                <th>Units Held</th>
+            </tr>
+        </thead>
+        <tbody>
+        @while(reader.Read())
+            {
+                <tr>
+                    <td>@(((DateTime)reader["date"]).ToShortDateString())</td>
+                    <td>@reader["symbol"]</td>
+                    <td>@reader["type"]</td>
+                    <td>@reader["description"]</td>
+                    <td>@reader["qty"]</td>
+                    <td>@reader["cash"]</td>
+                    <td>@reader["unitsHeld"]</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code
+{
+    private MySqlDataReader? reader;
+    private MySqlConnection? conn;
+
+    protected override async Task OnInitializedAsync()
+    {
+        conn = new MySqlConnection(configuration["ConnectionStrings:Default"]);
+        conn.Open();
+        MySqlCommand cmd = new MySqlCommand("SELECT * FROM trades ORDER BY date DESC", conn);
+        reader = await cmd.ExecuteReaderAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if(conn != null)
+            await conn.CloseAsync();
+    }
+}
