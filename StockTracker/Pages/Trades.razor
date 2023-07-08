@@ -58,8 +58,8 @@ else
         while(await reader.ReadAsync())
         {
             trades.Add(new DbTrades(reader.GetDateOnly("date"),
-                                    reader.GetString("symbol"),
-                                    reader.GetString("type"),
+                                    reader.GetValue("symbol").ToString(),
+                                    reader.GetValue("type").ToString(),
                                     reader.GetValue("description").ToString(),
                                     reader.GetDecimal("qty"),
                                     reader.GetDecimal("cash"),
