@@ -7,6 +7,9 @@
 
 <PageTitle>Trades</PageTitle>
 
+<AddTrade/>
+<br/><br/>
+
 <h3>Trades</h3>
 
 @if(trades == null)
@@ -51,7 +54,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]);
-        conn.Open();
+        await conn.OpenAsync();
         trades = new List<DbTrades>();
         MySqlCommand cmd = new MySqlCommand("SELECT * FROM trades ORDER BY date DESC", conn);
         MySqlDataReader reader = await cmd.ExecuteReaderAsync();
