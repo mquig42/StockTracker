@@ -1,4 +1,5 @@
 ﻿@page "/trades"
+@using StockTracker.Data
 @using System.Data;
 @using MySqlConnector;
 
@@ -8,7 +9,7 @@
 
 <h3>Trades</h3>
 
-@if(reader == null)
+@if(trades == null)
 {
     <p>Loading...</p>
 }
@@ -27,16 +28,16 @@ else
             </tr>
         </thead>
         <tbody>
-        @while(reader.Read())
+            @foreach(DbTrades trade in trades)
             {
                 <tr>
-                    <td>@(((DateTime)reader["date"]).ToShortDateString())</td>
-                    <td>@reader["symbol"]</td>
-                    <td>@reader["type"]</td>
-                    <td>@reader["description"]</td>
-                    <td>@reader["qty"]</td>
-                    <td>@reader["cash"]</td>
-                    <td>@reader["unitsHeld"]</td>
+                    <td>@trade.Date</td>
+                    <td>@trade.Symbol</td>
+                    <td>@trade.Type</td>
+                    <td>@trade.Description</td>
+                    <td>@trade.Qty</td>
+                    <td>@trade.Cash</td>
+                    <td>@trade.UnitsHeld</td>
                 </tr>
             }
         </tbody>
@@ -45,20 +46,25 @@ else
 
 @code
 {
-    private MySqlDataReader? reader;
-    private MySqlConnection? conn;
+    private List<DbTrades>? trades;
 
     protected override async Task OnInitializedAsync()
     {
-        conn = new MySqlConnection(configuration["ConnectionStrings:Default"]);
+        MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]);
         conn.Open();
+        trades = new List<DbTrades>();
         MySqlCommand cmd = new MySqlCommand("SELECT * FROM trades ORDER BY date DESC", conn);
-        reader = await cmd.ExecuteReaderAsync();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if(conn != null)
-            await conn.CloseAsync();
+        MySqlDataReader reader = await cmd.ExecuteReaderAsync();
+        while(await reader.ReadAsync())
+        {
+            trades.Add(new DbTrades(reader.GetDateOnly("date"),
+                                    reader.GetString("symbol"),
+                                    reader.GetString("type"),
+                                    reader.GetValue("description").ToString(),
+                                    reader.GetDecimal("qty"),
+                                    reader.GetDecimal("cash"),
+                                    reader.GetDecimal("unitsHeld")));
+        }
+        await conn.CloseAsync();
     }
 }
