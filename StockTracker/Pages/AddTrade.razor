@@ -18,9 +18,10 @@
     <option>SELL</option>
     <option>DIV</option>
 </select>
-<input placeholder="Description" @bind="inpDescription" />
-<input placeholder="Qty" @bind="inpQty" />
-<input placeholder="Cash" @bind="inpCash" />
+<br />
+Description: <input @bind="inpDescription" style="width:15%" />
+Quantity: <input @bind="inpQty" style="width:10%" />
+Cash: <input @bind="inpCash" style="width:10%" />
 <button class="btn btn-primary" @onclick="AddTradeAsync">Add</button>
 
 @code
