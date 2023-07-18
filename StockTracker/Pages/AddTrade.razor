@@ -2,6 +2,7 @@
 @using MySqlConnector;
 
 @inject IConfiguration configuration;
+@inject NavigationManager navigationmanager;
 
 <input type="date" @bind="inpDate" />
 <select @bind="@inpStock">
@@ -43,15 +44,16 @@ Cash: <input @bind="inpCash" style="width:10%" />
 
         //Populate stocks dropdown from database
         stocks = new List<KeyValuePair<string, string>>();
-        MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]);
-        await conn.OpenAsync();
-        MySqlCommand cmd = new MySqlCommand("SELECT * FROM stock", conn);
-        MySqlDataReader reader = await cmd.ExecuteReaderAsync();
-        while(await reader.ReadAsync())
+        using (MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]))
         {
-            stocks.Add(new KeyValuePair<string, string>(String.Format("{0} - {1}", reader.GetString(0), reader.GetString(1)), reader.GetString(0)));
+            await conn.OpenAsync();
+            MySqlCommand cmd = new MySqlCommand("SELECT * FROM stock", conn);
+            MySqlDataReader reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                stocks.Add(new KeyValuePair<string, string>(String.Format("{0} - {1}", reader.GetString(0), reader.GetString(1)), reader.GetString(0)));
+            }
         }
-        await conn.CloseAsync();
 
         //Set default values for dropdowns
         inpStock = stocks[0].Value;
@@ -60,28 +62,34 @@ Cash: <input @bind="inpCash" style="width:10%" />
 
     private async void AddTradeAsync()
     {
-        MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]);
-        await conn.OpenAsync();
+        using (MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]))
+        {
+            await conn.OpenAsync();
 
-        //First get latest UnitsHeld
-        MySqlCommand cmd = new MySqlCommand("SELECT unitsHeld FROM trades WHERE symbol = @symbol ORDER BY date DESC LIMIT 1", conn);
-        cmd.Parameters.AddWithValue("symbol", inpStock);
-        object? units = await cmd.ExecuteScalarAsync();
-        decimal decUnits = units == null ? 0 : (decimal)units;
+            //First get latest UnitsHeld
+            MySqlCommand cmd = new MySqlCommand("SELECT unitsHeld FROM trades WHERE symbol = @symbol ORDER BY date DESC LIMIT 1", conn);
+            cmd.Parameters.AddWithValue("symbol", inpStock);
+            object? units = await cmd.ExecuteScalarAsync();
+            decimal decUnits = units == null ? 0 : (decimal)units;
 
-        //Now insert new trade
-        //TODO this is a very basic implementation here. Need to validate inputs. Can set sign of cash column based on type. BUY is always negative, SELL is always positive, DIV is always 0.
-        //Also is it possible to refresh the page so the newly inserted trade is displayed?
-        cmd = new MySqlCommand("INSERT INTO trades(date, symbol, type, description, qty, cash, unitsHeld) values(@date, @symbol, @type, @description, @qty, @cash, @unitsHeld)", conn);
-        cmd.Parameters.AddWithValue("date", inpDate);
-        cmd.Parameters.AddWithValue("symbol", inpStock);
-        cmd.Parameters.AddWithValue("type", inpType);
-        cmd.Parameters.AddWithValue("description", inpDescription);
-        cmd.Parameters.AddWithValue("qty", inpQty);
-        cmd.Parameters.AddWithValue("cash", inpCash);
-        cmd.Parameters.AddWithValue("unitsHeld", decUnits + inpQty);
-        await cmd.ExecuteNonQueryAsync();
+            //Make sure correct sign is used for cash
+            decimal cashValue = Math.Abs(inpCash);
+            if (inpType == "BUY")
+                cashValue *= -1;
+            else if (inpType == "DIV")
+                cashValue = 0;
 
-        await conn.CloseAsync();
+            cmd = new MySqlCommand("INSERT INTO trades(date, symbol, type, description, qty, cash, unitsHeld) values(@date, @symbol, @type, @description, @qty, @cash, @unitsHeld)", conn);
+            cmd.Parameters.AddWithValue("date", inpDate);
+            cmd.Parameters.AddWithValue("symbol", inpStock);
+            cmd.Parameters.AddWithValue("type", inpType);
+            cmd.Parameters.AddWithValue("description", inpDescription);
+            cmd.Parameters.AddWithValue("qty", inpQty);
+            cmd.Parameters.AddWithValue("cash", cashValue);
+            cmd.Parameters.AddWithValue("unitsHeld", decUnits + inpQty);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        //Force page to reload, so any other components will show the newly entered trade
+        navigationmanager.NavigateTo(navigationmanager.Uri, true);
     }
 }

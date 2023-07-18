@@ -53,21 +53,23 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]);
-        await conn.OpenAsync();
         trades = new List<DbTrades>();
-        MySqlCommand cmd = new MySqlCommand("SELECT * FROM trades ORDER BY date DESC", conn);
-        MySqlDataReader reader = await cmd.ExecuteReaderAsync();
-        while(await reader.ReadAsync())
+
+        using (MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]))
         {
-            trades.Add(new DbTrades(reader.GetDateOnly("date"),
-                                    reader.GetValue("symbol").ToString(),
-                                    reader.GetValue("type").ToString(),
-                                    reader.GetValue("description").ToString(),
-                                    reader.GetDecimal("qty"),
-                                    reader.GetDecimal("cash"),
-                                    reader.GetDecimal("unitsHeld")));
+            await conn.OpenAsync();
+            MySqlCommand cmd = new MySqlCommand("SELECT * FROM trades ORDER BY date DESC", conn);
+            MySqlDataReader reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                trades.Add(new DbTrades(reader.GetDateOnly("date"),
+                                        reader.GetValue("symbol").ToString(),
+                                        reader.GetValue("type").ToString(),
+                                        reader.GetValue("description").ToString(),
+                                        reader.GetDecimal("qty"),
+                                        reader.GetDecimal("cash"),
+                                        reader.GetDecimal("unitsHeld")));
+            }
         }
-        await conn.CloseAsync();
     }
 }
