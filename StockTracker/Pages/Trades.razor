@@ -7,7 +7,29 @@
 
 <PageTitle>Trades</PageTitle>
 
-<AddTrade/>
+<input type="date" @bind="inpDate" />
+<select @bind="@inpStock">
+    @if (stocks != null)
+    {
+        foreach (KeyValuePair<string, string> stock in stocks)
+        {
+            <option value=@stock.Value>@stock.Key</option>
+        }
+    }
+</select>
+<select @bind="inpType">
+    <option>BUY</option>
+    <option>SELL</option>
+    <option>DIV</option>
+</select>
+<br />
+Description:
+<input @bind="inpDescription" style="width:15%" />
+Quantity:
+<input @bind="inpQty" style="width:10%" />
+Cash:
+<input @bind="inpCash" style="width:10%" />
+<button class="btn btn-primary" @onclick="AddTradeAsync">Add</button>
 <br/><br/>
 
 <h3>Trades</h3>
@@ -50,8 +72,43 @@ else
 @code
 {
     private List<DbTrades>? trades;
+    private List<KeyValuePair<string, string>>? stocks;
+
+    //Bound fields for inputs
+    private DateOnly? inpDate;
+    private string? inpStock;
+    private string? inpType;
+    private string? inpDescription;
+    private decimal inpQty;
+    private decimal inpCash;
 
     protected override async Task OnInitializedAsync()
+    {
+        await GetTrades();
+
+        //Set date picker to today
+        inpDate = DateOnly.FromDateTime(DateTime.Today);
+
+        //Populate stocks dropdown from database
+        stocks = new List<KeyValuePair<string, string>>();
+        using (MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]))
+        {
+            await conn.OpenAsync();
+            MySqlCommand cmd = new MySqlCommand("SELECT * FROM stock", conn);
+            MySqlDataReader reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                stocks.Add(new KeyValuePair<string, string>(String.Format("{0} - {1}", reader.GetString(0), reader.GetString(1)), reader.GetString(0)));
+            }
+        }
+
+        //Set default values for dropdowns
+        inpStock = stocks[0].Value;
+        inpType = "BUY";
+    }
+
+    //Gets complete list of trades from database. Triggers a rerender.
+    protected async Task GetTrades()
     {
         trades = new List<DbTrades>();
 
@@ -71,5 +128,39 @@ else
                                         reader.GetDecimal("unitsHeld")));
             }
         }
+        StateHasChanged();
+    }
+
+    private async void AddTradeAsync()
+    {
+        using (MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]))
+        {
+            await conn.OpenAsync();
+
+            //First get latest UnitsHeld
+            MySqlCommand cmd = new MySqlCommand("SELECT unitsHeld FROM trades WHERE symbol = @symbol ORDER BY date DESC LIMIT 1", conn);
+            cmd.Parameters.AddWithValue("symbol", inpStock);
+            object? units = await cmd.ExecuteScalarAsync();
+            decimal decUnits = units == null ? 0 : (decimal)units;
+
+            //Make sure correct sign is used for cash
+            decimal cashValue = Math.Abs(inpCash);
+            if (inpType == "BUY")
+                cashValue *= -1;
+            else if (inpType == "DIV")
+                cashValue = 0;
+
+            cmd = new MySqlCommand("INSERT INTO trades(date, symbol, type, description, qty, cash, unitsHeld) values(@date, @symbol, @type, @description, @qty, @cash, @unitsHeld)", conn);
+            cmd.Parameters.AddWithValue("date", inpDate);
+            cmd.Parameters.AddWithValue("symbol", inpStock);
+            cmd.Parameters.AddWithValue("type", inpType);
+            cmd.Parameters.AddWithValue("description", inpDescription);
+            cmd.Parameters.AddWithValue("qty", inpQty);
+            cmd.Parameters.AddWithValue("cash", cashValue);
+            cmd.Parameters.AddWithValue("unitsHeld", decUnits + inpQty);
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        await GetTrades();
     }
 }
