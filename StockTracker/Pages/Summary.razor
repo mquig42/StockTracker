@@ -1,0 +1,77 @@
+﻿@page "/summary"
+@using System.Data;
+@using MySqlConnector;
+
+@inject IConfiguration configuration;
+
+<PageTitle>Summary</PageTitle>
+<table>
+    <tr>
+        <td>TFSA Limit:</td>
+        <td>@tfsaLimit.ToString("C")</td>
+    </tr>
+    <tr>
+        <td>Total Contributed:</td>
+        <td>@totalCash.ToString("C")</td>
+    </tr>
+    <tr>
+        <td>Remaining:</td>
+        <td>@((tfsaLimit - totalCash).ToString("C"))</td>
+    </tr>
+</table>
+
+@if(contributionsByYear == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <td>Year</td>
+                <td>Contribution</td>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach(KeyValuePair<int, decimal> row in contributionsByYear)
+            {
+                <tr>
+                    <td>@row.Key</td>
+                    <td>@row.Value.ToString("C")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code
+{
+    private decimal tfsaLimit = 0;
+    private decimal totalCash = 0;
+    private List<KeyValuePair<int, decimal>>? contributionsByYear;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]))
+        {
+            await conn.OpenAsync();
+            MySqlCommand tfsaCommand = new MySqlCommand("SELECT SUM(lim) FROM tfsa_limit", conn);
+            var result = await tfsaCommand.ExecuteScalarAsync();
+            tfsaLimit = result == null ? 0 : (decimal)result;
+        }
+
+        contributionsByYear = new List<KeyValuePair<int, decimal>>();
+        using (MySqlConnection conn = new MySqlConnection(configuration["ConnectionStrings:Default"]))
+        {
+            await conn.OpenAsync();
+            MySqlCommand byYearCommand = new MySqlCommand("SELECT YEAR(date) AS year, SUM(cash) * -1 AS contribution FROM trades GROUP BY YEAR(date)", conn);
+            MySqlDataReader reader = await byYearCommand.ExecuteReaderAsync();
+            while(reader.Read())
+            {
+                totalCash += reader.GetDecimal("contribution");
+                contributionsByYear.Add(new KeyValuePair<int, decimal>(reader.GetInt32("year"), reader.GetDecimal("contribution")));
+            }
+        }
+    }
+}
